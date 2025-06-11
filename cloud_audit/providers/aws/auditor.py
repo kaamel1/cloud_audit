@@ -79,6 +79,12 @@ class AWSAuditor(CloudAuditor):
         from .assets.collector import collect_aws_assets_and_flows
         return collect_aws_assets_and_flows(self.session, self.output_dir)
     
+    def get_all_assets_global(self) -> Dict[str, Any]:
+        """
+        获取所有全局资产信息，并按资源类型分类保存
+        """
+        from .assets.collector_global import collect_aws_global_assets_and_flows
+        return collect_aws_global_assets_and_flows(self.session, self.output_dir)
 
       
     def save_json(self, data: Dict[str, Any], relative_path: str, filename: str):

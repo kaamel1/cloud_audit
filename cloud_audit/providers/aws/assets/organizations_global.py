@@ -1,5 +1,6 @@
 """
-AWS Organizations资源处理模块，负责获取组织、账户、组织单位、服务控制策略等企业级管理资源信息。
+AWS Organizations全局资源处理模块，负责获取组织、账户、组织单位、服务控制策略等企业级管理全局资源信息。
+Organizations是AWS的全局服务，在不同区域获取到的数据是一致的。
 """
 import boto3
 import logging
@@ -7,12 +8,12 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-class OrganizationsAssetCollector:
-    """AWS Organizations资源收集器"""
+class OrganizationsGlobalAssetCollector:
+    """AWS Organizations全局资源收集器"""
 
     def __init__(self, session):
         """
-        初始化Organizations资源收集器
+        初始化Organizations全局资源收集器
 
         Args:
             session: AWS会话对象
@@ -225,40 +226,16 @@ class OrganizationsAssetCollector:
                     except Exception as e:
                         logger.warning(f"获取OU {ou['Id']} 策略类型失败: {str(e)}")
 
-                    # 获取OU的子级账户
-                    child_accounts = []
-                    try:
-                        child_next_token = None
-                        while True:
-                            if child_next_token:
-                                children_response = self.organizations_client.list_accounts_for_parent(
-                                    ParentId=ou['Id'],
-                                    NextToken=child_next_token
-                                )
-                            else:
-                                children_response = self.organizations_client.list_accounts_for_parent(ParentId=ou['Id'])
-                            
-                            child_accounts.extend(children_response.get('Accounts', []))
-                            
-                            if 'NextToken' in children_response:
-                                child_next_token = children_response['NextToken']
-                            else:
-                                break
-                    except Exception as e:
-                        logger.warning(f"获取OU {ou['Id']} 子级账户失败: {str(e)}")
-
                     ou_info = {
                         'Id': ou.get('Id'),
                         'Arn': ou.get('Arn'),
                         'Name': ou.get('Name'),
-                        'ParentId': parent_id,
                         'Tags': tags,
-                        'PolicyTypes': policy_types,
-                        'ChildAccounts': child_accounts
+                        'PolicyTypes': policy_types
                     }
                     ous.append(ou_info)
                     
-                    # 递归获取子级OU
+                    # 递归获取子OU
                     child_ous = self._get_ous_recursive(ou['Id'])
                     ous.extend(child_ous)
                 
@@ -266,10 +243,10 @@ class OrganizationsAssetCollector:
                     next_token = response['NextToken']
                 else:
                     break
-
+                    
         except Exception as e:
-            logger.warning(f"获取父级 {parent_id} 的组织单位失败: {str(e)}")
-
+            logger.error(f"获取父级 {parent_id} 的OU失败: {str(e)}")
+            
         return ous
 
     def get_policies(self) -> List[Dict[str, Any]]:
@@ -304,9 +281,7 @@ class OrganizationsAssetCollector:
                                 PolicyId=policy['Id']
                             )
                             
-                            policy_info = policy_detail['Policy']
-                            
-                            # 获取策略标签
+                            # 获取策略的标签
                             tags = []
                             try:
                                 tags_response = self.organizations_client.list_tags_for_resource(
@@ -316,41 +291,29 @@ class OrganizationsAssetCollector:
                             except Exception as e:
                                 logger.warning(f"获取策略 {policy['Id']} 标签失败: {str(e)}")
 
-                            # 获取策略关联的目标
+                            # 获取策略目标
                             targets = []
                             try:
-                                targets_next_token = None
-                                while True:
-                                    if targets_next_token:
-                                        targets_response = self.organizations_client.list_targets_for_policy(
-                                            PolicyId=policy['Id'],
-                                            NextToken=targets_next_token
-                                        )
-                                    else:
-                                        targets_response = self.organizations_client.list_targets_for_policy(PolicyId=policy['Id'])
-                                    
-                                    targets.extend(targets_response.get('Targets', []))
-                                    
-                                    if 'NextToken' in targets_response:
-                                        targets_next_token = targets_response['NextToken']
-                                    else:
-                                        break
+                                targets_response = self.organizations_client.list_targets_for_policy(
+                                    PolicyId=policy['Id']
+                                )
+                                targets = targets_response.get('Targets', [])
                             except Exception as e:
-                                logger.warning(f"获取策略 {policy['Id']} 关联目标失败: {str(e)}")
+                                logger.warning(f"获取策略 {policy['Id']} 目标失败: {str(e)}")
 
-                            enhanced_policy_info = {
-                                'Id': policy_info.get('Id'),
-                                'Arn': policy_info.get('Arn'),
-                                'Name': policy_info.get('Name'),
-                                'Description': policy_info.get('Description'),
-                                'Type': policy_info.get('Type'),
-                                'AwsManaged': policy_info.get('AwsManaged'),
-                                'Content': policy_info.get('Content'),
-                                'PolicySummary': policy_info.get('PolicySummary'),
+                            policy_info = {
+                                'Id': policy_detail['Policy'].get('Id'),
+                                'Arn': policy_detail['Policy'].get('Arn'),
+                                'Name': policy_detail['Policy'].get('Name'),
+                                'Description': policy_detail['Policy'].get('Description'),
+                                'Type': policy_detail['Policy'].get('Type'),
+                                'AwsManaged': policy_detail['Policy'].get('AwsManaged'),
+                                'Content': policy_detail['Policy'].get('Content'),
+                                'Summary': policy_detail['Policy'].get('Summary'),
                                 'Tags': tags,
                                 'Targets': targets
                             }
-                            all_policies.append(enhanced_policy_info)
+                            all_policies.append(policy_info)
                         
                         if 'NextToken' in response:
                             next_token = response['NextToken']
@@ -367,7 +330,7 @@ class OrganizationsAssetCollector:
 
     def get_handshakes(self) -> List[Dict[str, Any]]:
         """
-        获取组织邀请握手信息
+        获取组织握手信息
 
         Returns:
             List[Dict[str, Any]]: 握手列表
@@ -387,12 +350,12 @@ class OrganizationsAssetCollector:
                     handshake_info = {
                         'Id': handshake.get('Id'),
                         'Arn': handshake.get('Arn'),
+                        'Parties': handshake.get('Parties'),
                         'State': handshake.get('State'),
                         'RequestedTimestamp': handshake.get('RequestedTimestamp'),
                         'ExpirationTimestamp': handshake.get('ExpirationTimestamp'),
                         'Action': handshake.get('Action'),
-                        'Resources': handshake.get('Resources', []),
-                        'Parties': handshake.get('Parties', [])
+                        'Resources': handshake.get('Resources')
                     }
                     handshakes.append(handshake_info)
                 
@@ -406,78 +369,101 @@ class OrganizationsAssetCollector:
 
         return handshakes
 
-    def get_all_organizations_assets(self) -> Dict[str, Any]:
+    def get_delegated_administrators(self) -> List[Dict[str, Any]]:
         """
-        获取所有Organizations资源
+        获取委托管理员信息
 
         Returns:
-            Dict[str, Any]: 所有Organizations资源
+            List[Dict[str, Any]]: 委托管理员列表
         """
-        logger.info("获取所有AWS Organizations资源")
+        logger.info("获取AWS Organizations委托管理员信息")
+        delegated_admins = []
+
+        try:
+            next_token = None
+            while True:
+                if next_token:
+                    response = self.organizations_client.list_delegated_administrators(NextToken=next_token)
+                else:
+                    response = self.organizations_client.list_delegated_administrators()
+                
+                for admin in response.get('DelegatedAdministrators', []):
+                    admin_info = {
+                        'Id': admin.get('Id'),
+                        'Arn': admin.get('Arn'),
+                        'Email': admin.get('Email'),
+                        'Name': admin.get('Name'),
+                        'Status': admin.get('Status'),
+                        'JoinedMethod': admin.get('JoinedMethod'),
+                        'JoinedTimestamp': admin.get('JoinedTimestamp'),
+                        'DelegationEnabledDate': admin.get('DelegationEnabledDate')
+                    }
+                    delegated_admins.append(admin_info)
+                
+                if 'NextToken' in response:
+                    next_token = response['NextToken']
+                else:
+                    break
+
+        except Exception as e:
+            logger.error(f"获取委托管理员信息失败: {str(e)}")
+
+        return delegated_admins
+
+    def get_aws_service_access(self) -> List[Dict[str, Any]]:
+        """
+        获取AWS服务访问信息
+
+        Returns:
+            List[Dict[str, Any]]: AWS服务访问列表
+        """
+        logger.info("获取AWS Organizations服务访问信息")
+        service_access = []
+
+        try:
+            next_token = None
+            while True:
+                if next_token:
+                    response = self.organizations_client.list_aws_service_access_for_organization(NextToken=next_token)
+                else:
+                    response = self.organizations_client.list_aws_service_access_for_organization()
+                
+                for service in response.get('EnabledServicePrincipals', []):
+                    service_info = {
+                        'ServicePrincipal': service.get('ServicePrincipal'),
+                        'DateEnabled': service.get('DateEnabled')
+                    }
+                    service_access.append(service_info)
+                
+                if 'NextToken' in response:
+                    next_token = response['NextToken']
+                else:
+                    break
+
+        except Exception as e:
+            logger.error(f"获取AWS服务访问信息失败: {str(e)}")
+
+        return service_access
+
+    def get_all_organizations_global_assets(self) -> Dict[str, Any]:
+        """
+        获取所有Organizations全局资源
+
+        Returns:
+            Dict[str, Any]: 所有Organizations全局资源
+        """
+        logger.info("开始收集所有Organizations全局资源")
         
-        organization = self.get_organization()
-        
-        # 如果没有组织，返回空结构
-        if not organization:
-            return {
-                'organization': None,
-                'accounts': [],
-                'roots': [],
-                'organizational_units': [],
-                'policies': [],
-                'handshakes': [],
-                'summary': {
-                    'has_organization': False,
-                    'total_accounts': 0,
-                    'total_ous': 0,
-                    'total_policies': 0,
-                    'total_handshakes': 0
-                }
-            }
-        
-        accounts = self.get_accounts()
-        roots = self.get_roots()
-        organizational_units = self.get_organizational_units()
-        policies = self.get_policies()
-        handshakes = self.get_handshakes()
-        
-        # 按类型分组策略
-        policies_by_type = {}
-        for policy in policies:
-            policy_type = policy.get('Type', 'UNKNOWN')
-            if policy_type not in policies_by_type:
-                policies_by_type[policy_type] = []
-            policies_by_type[policy_type].append(policy)
-        
-        # 按状态分组账户
-        accounts_by_status = {}
-        for account in accounts:
-            status = account.get('Status', 'UNKNOWN')
-            if status not in accounts_by_status:
-                accounts_by_status[status] = []
-            accounts_by_status[status].append(account)
-        
-        organizations_assets = {
-            'organization': organization,
-            'accounts': {account['Id']: account for account in accounts},
-            'roots': {root['Id']: root for root in roots},
-            'organizational_units': {ou['Id']: ou for ou in organizational_units},
-            'policies': {policy['Id']: policy for policy in policies},
-            'handshakes': handshakes,  # 保持列表格式
-            'policies_by_type': policies_by_type,
-            'accounts_by_status': accounts_by_status,
-            'summary': {
-                'has_organization': True,
-                'organization_id': organization.get('Id'),
-                'master_account_id': organization.get('MasterAccountId'),
-                'feature_set': organization.get('FeatureSet'),
-                'total_accounts': len(accounts),
-                'total_roots': len(roots),
-                'total_ous': len(organizational_units),
-                'total_policies': len(policies),
-                'total_handshakes': len(handshakes)
-            }
+        assets = {
+            'organization': self.get_organization(),
+            'accounts': self.get_accounts(),
+            'roots': self.get_roots(),
+            'organizational_units': self.get_organizational_units(),
+            'policies': self.get_policies(),
+            'handshakes': self.get_handshakes(),
+            'delegated_administrators': self.get_delegated_administrators(),
+            'aws_service_access': self.get_aws_service_access()
         }
         
-        logger.info(f"已获取组织信息, {len(accounts)} 个账户, {len(organizational_units)} 个OU, {len(policies)} 个策略, {len(handshakes)} 个握手")
-        return organizations_assets 
+        logger.info("Organizations全局资源收集完成")
+        return assets 

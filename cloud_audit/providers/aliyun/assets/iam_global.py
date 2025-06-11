@@ -1,16 +1,16 @@
-"""阿里云RAM资源处理模块，负责获取RAM用户、角色、权限策略等资源信息。"""
+"""阿里云RAM全局资源处理模块，负责获取RAM用户、角色、权限策略等全局资源信息。"""
 import logging
 import json
 from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-class IAMAssetCollector:
-    """阿里云RAM资源收集器"""
+class IAMGlobalAssetCollector:
+    """阿里云RAM全局资源收集器"""
 
     def __init__(self, session):
         """
-        初始化RAM资源收集器
+        初始化RAM全局资源收集器
 
         Args:
             session: 阿里云会话对象
@@ -404,20 +404,26 @@ class IAMAssetCollector:
             
         return policies
 
-    def get_all_iam_assets(self) -> Dict[str, Any]:
+    def get_all_iam_global_assets(self) -> Dict[str, Any]:
         """
-        获取所有RAM区域相关资源
-        注意：RAM资源完全是全局的，区域级别收集器返回空结果
-        请使用 IAMGlobalAssetCollector 获取RAM资源
+        获取所有RAM全局资源
 
         Returns:
-            Dict[str, Any]: 空的结果，因为RAM资源都是全局的
+            Dict[str, Any]: 所有RAM全局资源
         """
-        logger.info("RAM资源完全是全局的，区域级别收集器跳过")
+        logger.info("获取所有阿里云RAM全局资源")
         
-        # RAM资源都是全局的，区域级别收集器返回空结果
-        return {
-            'users': {},
-            'roles': {},
-            'policies': {},
-        } 
+        # 获取各类RAM资源
+        users = self.get_users()
+        roles = self.get_roles()
+        policies = self.get_policies()
+        
+        # 组织返回结果
+        iam_assets = {
+            'users': {user['UserName']: user for user in users},
+            'roles': {role['RoleName']: role for role in roles},
+            'policies': {policy['PolicyName']: policy for policy in policies},
+        }
+        
+        logger.info(f"已获取 {len(users)} 个RAM用户, {len(roles)} 个RAM角色, {len(policies)} 个RAM权限策略")
+        return iam_assets 

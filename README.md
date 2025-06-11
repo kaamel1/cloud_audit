@@ -133,11 +133,11 @@ python cloud_audit_cli.py audit \
   - 如果不指定，将审计所有可用区域
 
 - `--output-dir` - 输出目录路径（默认：`output`）
-  - 审计结果将保存在此目录下
+  - 审计结果将保存在`output_all`目录下的此二级目录下
 
 ## 输出结构
 
-审计结果将保存在指定的输出目录（默认为`output`）中，按以下结构组织：
+审计结果将保存在指定的输出目录（默认为`output_all/output`）中，按以下结构组织：
 
 ```
 output/
@@ -165,6 +165,10 @@ output/
 - 确保使用的用户或角色有足够的权限
 - 对于跨账户审计，确保目标角色有足够的权限
 
-## 许可证
+# RDS
+## pgsql数据获取
+```
+python rds/rds_data_audit_pgsql.py --host=xxx --port=xxx --database=xxx --username=xxx --password=xxx --output-dir=xxxxxx
 
-MIT License
+python rds/rds_user_permissions_pgsql.py --host=xxxxx --port=xxxx --database=xxxx --username=xxxx --password=xxxx --output=excel
+```

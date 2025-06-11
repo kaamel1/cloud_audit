@@ -1,5 +1,6 @@
 """
-AWS CloudFront资源处理模块，负责获取CloudFront分发、源站等全球CDN资源信息。
+AWS CloudFront全局资源处理模块，负责获取CloudFront分发、源站等全球CDN全局资源信息。
+CloudFront是AWS的全局服务，在不同区域获取到的数据是一致的。
 """
 import boto3
 import logging
@@ -7,12 +8,12 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-class CloudFrontAssetCollector:
-    """AWS CloudFront资源收集器"""
+class CloudFrontGlobalAssetCollector:
+    """AWS CloudFront全局资源收集器"""
 
     def __init__(self, session):
         """
-        初始化CloudFront资源收集器
+        初始化CloudFront全局资源收集器
 
         Args:
             session: AWS会话对象
@@ -136,55 +137,46 @@ class CloudFrontAssetCollector:
 
         return identities
 
-    def get_invalidations(self) -> List[Dict[str, Any]]:
+    def get_origin_access_controls(self) -> List[Dict[str, Any]]:
         """
-        获取CloudFront失效信息
+        获取CloudFront原点访问控制信息
 
         Returns:
-            List[Dict[str, Any]]: 失效列表
+            List[Dict[str, Any]]: 原点访问控制列表
         """
-        logger.info("获取CloudFront失效信息")
-        all_invalidations = []
+        logger.info("获取CloudFront原点访问控制信息")
+        access_controls = []
 
         try:
-            # 首先获取所有分发
-            distributions = self.get_distributions()
-            
-            for dist in distributions:
-                dist_id = dist['Id']
-                try:
-                    next_marker = None
-                    while True:
-                        if next_marker:
-                            response = self.cloudfront_client.list_invalidations(
-                                DistributionId=dist_id,
-                                Marker=next_marker
-                            )
-                        else:
-                            response = self.cloudfront_client.list_invalidations(DistributionId=dist_id)
-                        
-                        for invalidation in response.get('InvalidationList', {}).get('Items', []):
-                            invalidation_info = {
-                                'DistributionId': dist_id,
-                                'Id': invalidation.get('Id'),
-                                'Status': invalidation.get('Status'),
-                                'CreateTime': invalidation.get('CreateTime'),
-                                'InvalidationBatch': invalidation.get('InvalidationBatch')
-                            }
-                            all_invalidations.append(invalidation_info)
-                        
-                        if response.get('InvalidationList', {}).get('IsTruncated'):
-                            next_marker = response['InvalidationList']['NextMarker']
-                        else:
-                            break
-                            
-                except Exception as e:
-                    logger.warning(f"获取分发 {dist_id} 的失效信息失败: {str(e)}")
+            # 获取原点访问控制列表
+            next_marker = None
+            while True:
+                if next_marker:
+                    response = self.cloudfront_client.list_origin_access_controls(Marker=next_marker)
+                else:
+                    response = self.cloudfront_client.list_origin_access_controls()
+                
+                for oac in response.get('OriginAccessControlList', {}).get('Items', []):
+                    # 获取详细信息
+                    oac_detail = self.cloudfront_client.get_origin_access_control(
+                        Id=oac['Id']
+                    )
+                    
+                    oac_info = {
+                        'Id': oac_detail['OriginAccessControl'].get('Id'),
+                        'OriginAccessControlConfig': oac_detail['OriginAccessControl'].get('OriginAccessControlConfig')
+                    }
+                    access_controls.append(oac_info)
+                
+                if response.get('OriginAccessControlList', {}).get('IsTruncated'):
+                    next_marker = response['OriginAccessControlList']['NextMarker']
+                else:
+                    break
 
         except Exception as e:
-            logger.error(f"获取CloudFront失效信息失败: {str(e)}")
+            logger.error(f"获取CloudFront原点访问控制信息失败: {str(e)}")
 
-        return all_invalidations
+        return access_controls
 
     def get_streaming_distributions(self) -> List[Dict[str, Any]]:
         """
@@ -232,26 +224,105 @@ class CloudFrontAssetCollector:
 
         return streaming_distributions
 
-    def get_all_cloudfront_assets(self) -> Dict[str, Any]:
+    def get_cache_policies(self) -> List[Dict[str, Any]]:
         """
-        获取所有CloudFront资源
+        获取CloudFront缓存策略信息
 
         Returns:
-            Dict[str, Any]: 所有CloudFront资源
+            List[Dict[str, Any]]: 缓存策略列表
         """
-        logger.info("获取所有CloudFront资源")
+        logger.info("获取CloudFront缓存策略信息")
+        cache_policies = []
+
+        try:
+            next_marker = None
+            while True:
+                if next_marker:
+                    response = self.cloudfront_client.list_cache_policies(Marker=next_marker)
+                else:
+                    response = self.cloudfront_client.list_cache_policies()
+                
+                for policy in response.get('CachePolicyList', {}).get('Items', []):
+                    # 获取策略详细信息
+                    policy_detail = self.cloudfront_client.get_cache_policy(
+                        Id=policy['CachePolicy']['Id']
+                    )
+                    
+                    cache_policy_info = {
+                        'Id': policy_detail['CachePolicy'].get('Id'),
+                        'LastModifiedTime': policy_detail['CachePolicy'].get('LastModifiedTime'),
+                        'CachePolicyConfig': policy_detail['CachePolicy'].get('CachePolicyConfig')
+                    }
+                    cache_policies.append(cache_policy_info)
+                
+                if response.get('CachePolicyList', {}).get('IsTruncated'):
+                    next_marker = response['CachePolicyList']['NextMarker']
+                else:
+                    break
+
+        except Exception as e:
+            logger.error(f"获取CloudFront缓存策略信息失败: {str(e)}")
+
+        return cache_policies
+
+    def get_origin_request_policies(self) -> List[Dict[str, Any]]:
+        """
+        获取CloudFront原点请求策略信息
+
+        Returns:
+            List[Dict[str, Any]]: 原点请求策略列表
+        """
+        logger.info("获取CloudFront原点请求策略信息")
+        origin_request_policies = []
+
+        try:
+            next_marker = None
+            while True:
+                if next_marker:
+                    response = self.cloudfront_client.list_origin_request_policies(Marker=next_marker)
+                else:
+                    response = self.cloudfront_client.list_origin_request_policies()
+                
+                for policy in response.get('OriginRequestPolicyList', {}).get('Items', []):
+                    # 获取策略详细信息
+                    policy_detail = self.cloudfront_client.get_origin_request_policy(
+                        Id=policy['OriginRequestPolicy']['Id']
+                    )
+                    
+                    origin_request_policy_info = {
+                        'Id': policy_detail['OriginRequestPolicy'].get('Id'),
+                        'LastModifiedTime': policy_detail['OriginRequestPolicy'].get('LastModifiedTime'),
+                        'OriginRequestPolicyConfig': policy_detail['OriginRequestPolicy'].get('OriginRequestPolicyConfig')
+                    }
+                    origin_request_policies.append(origin_request_policy_info)
+                
+                if response.get('OriginRequestPolicyList', {}).get('IsTruncated'):
+                    next_marker = response['OriginRequestPolicyList']['NextMarker']
+                else:
+                    break
+
+        except Exception as e:
+            logger.error(f"获取CloudFront原点请求策略信息失败: {str(e)}")
+
+        return origin_request_policies
+
+    def get_all_cloudfront_global_assets(self) -> Dict[str, Any]:
+        """
+        获取所有CloudFront全局资源
+
+        Returns:
+            Dict[str, Any]: 所有CloudFront全局资源
+        """
+        logger.info("开始收集所有CloudFront全局资源")
         
-        distributions = self.get_distributions()
-        origin_access_identities = self.get_origin_access_identities()
-        invalidations = self.get_invalidations()
-        streaming_distributions = self.get_streaming_distributions()
-        
-        cloudfront_assets = {
-            'distributions': {dist['Id']: dist for dist in distributions},
-            'origin_access_identities': {oai['Id']: oai for oai in origin_access_identities},
-            'invalidations': invalidations,  # 保持列表格式，因为可能有重复的分发ID
-            'streaming_distributions': {stream['Id']: stream for stream in streaming_distributions}
+        assets = {
+            'distributions': self.get_distributions(),
+            'origin_access_identities': self.get_origin_access_identities(),
+            'origin_access_controls': self.get_origin_access_controls(),
+            'streaming_distributions': self.get_streaming_distributions(),
+            'cache_policies': self.get_cache_policies(),
+            'origin_request_policies': self.get_origin_request_policies()
         }
         
-        logger.info(f"已获取 {len(distributions)} 个CloudFront分发, {len(origin_access_identities)} 个原点访问身份, {len(invalidations)} 个失效记录, {len(streaming_distributions)} 个流分发")
-        return cloudfront_assets 
+        logger.info("CloudFront全局资源收集完成")
+        return assets 

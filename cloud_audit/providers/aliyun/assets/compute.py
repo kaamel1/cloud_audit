@@ -33,6 +33,7 @@ class ComputeAssetCollector:
         try:
             # 打印当前会话的区域和AccessKey信息（部分掩码处理）
             logger.info(f"实际使用的区域: {self.session.region_id}")
+            logger.info(f"=== 开始获取区域 {self.session.region_id} 的ECS实例 ===")
             masked_ak = self.session.access_key_id[:4] + "****" + self.session.access_key_id[-4:] if len(self.session.access_key_id) > 8 else "***"
             logger.info(f"使用的AccessKey ID (掩码): {masked_ak}")
             

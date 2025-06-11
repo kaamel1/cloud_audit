@@ -10,6 +10,15 @@ class CloudAuditorManager:
 
     def __init__(self):
         self._factories: Dict[str, CloudAuditorFactory] = {}
+        self._global_region: Dict[str, str] = {}
+
+    def register_global_region(self, provider_name: str, region_id: str) -> None:
+        """Register a global region for the specified cloud provider"""
+        self._global_region[provider_name] = region_id
+
+    def get_global_region(self, provider_name: str) -> Optional[str]:
+        """Get the global region for the specified cloud provider"""
+        return self._global_region.get(provider_name, None)
 
     def register_factory(self, provider_name: str, factory: CloudAuditorFactory) -> None:
         """Register a cloud auditor factory"""
@@ -44,6 +53,7 @@ manager = CloudAuditorManager()
 try:
     from .providers.aws import AWSAuditorFactory
     manager.register_factory('aws', AWSAuditorFactory())
+    manager.register_global_region('aws', 'us-east-1')
 except ImportError:
     pass
 
@@ -51,6 +61,7 @@ except ImportError:
 try:
     from .providers.aliyun import AliyunAuditorFactory
     manager.register_factory('aliyun', AliyunAuditorFactory())
+    manager.register_global_region('aliyun', 'cn-hangzhou')
 except ImportError:
     pass
 

@@ -56,6 +56,11 @@ class CloudAuditor(ABC):
         """Get all assets from the cloud provider"""
         pass
 
+    @abstractmethod
+    def get_all_assets_global(self) -> Dict[str, Any]:
+        """Get all assets from the cloud provider"""
+        pass
+
     def save_json(self, data: Dict[str, Any], category: str, filename: str) -> None:
         """Save data as JSON file"""
         filepath = os.path.join(self.output_dir, category, f"{filename}_{self.timestamp}.json")
@@ -69,6 +74,14 @@ class CloudAuditor(ABC):
         # Collect and save assets data
         assets = self.get_all_assets()
         self.save_json(assets, 'assets', 'all_assets')
+
+    def run_audit_global(self) -> None:
+        """Run the complete audit"""
+        self.create_output_dirs()
+
+        # Collect and save assets data
+        assets = self.get_all_assets_global()
+        self.save_json(assets, 'assets', 'all_assets_global')
 
 
 class CloudAuditorFactory(ABC):

@@ -27,6 +27,7 @@ class NetworkAssetCollector:
             List[Dict[str, Any]]: VPC列表
         """
         logger.info("获取VPC信息")
+        logger.info(f"=== 开始获取区域 {self.session.region_id} 的VPC ===")
         vpcs = []
 
         try:

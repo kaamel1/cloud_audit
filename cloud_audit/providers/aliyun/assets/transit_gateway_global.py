@@ -1,16 +1,16 @@
-"""阿里云传输网关及高级网络资源处理模块，负责获取云企业网(CEN)、高速通道等网络资源信息。"""
+"""阿里云传输网关及高级网络全局资源处理模块，负责获取云企业网(CEN)等全局网络资源信息。"""
 import logging
 import importlib.util
 from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-class TransitGatewayAssetCollector:
-    """阿里云传输网关及高级网络资源收集器"""
+class TransitGatewayGlobalAssetCollector:
+    """阿里云传输网关及高级网络全局资源收集器"""
 
     def __init__(self, session):
         """
-        初始化传输网关及高级网络资源收集器
+        初始化传输网关及高级网络全局资源收集器
 
         Args:
             session: 阿里云会话对象
@@ -384,40 +384,42 @@ class TransitGatewayAssetCollector:
 
         return gateways
 
-    def get_all_transit_gateway_assets(self) -> Dict[str, Any]:
+    def get_all_transit_gateway_global_assets(self) -> Dict[str, Any]:
         """
-        获取所有传输网关及高级网络区域相关资产信息
-        注意：云企业网(CEN)是全局资源，请使用 TransitGatewayGlobalAssetCollector 获取
-        此方法主要获取高速通道、VPN网关等区域相关资源
+        获取所有传输网关及高级网络全局资产信息（主要是云企业网 CEN）
 
         Returns:
-            Dict[str, Any]: 传输网关及高级网络区域相关资产信息
+            Dict[str, Any]: 所有传输网关及高级网络全局资产信息
         """
-        logger.info("获取传输网关及高级网络区域相关资产信息")
+        logger.info("获取所有传输网关及高级网络全局资产信息")
         
-        # 检查SDK可用性状态（排除CEN，因为它是全局的）
+        # 检查SDK可用性状态
         sdk_status = {
-            'expressconnect': 'available' if self.has_expressconnect_sdk else 'sdk_missing',
-            'smartag': 'available' if self.has_smartag_sdk else 'sdk_missing',
-            'vpn': 'available' if self.has_vpn_sdk else 'sdk_missing'
+            'cbn': 'available' if self.has_cbn_sdk else 'sdk_missing',
         }
         
-        # 获取区域相关的网络资源
-        physical_connections = self.get_express_connect_physical_connections() if self.has_expressconnect_sdk else []
-        vpn_gateways = self.get_vpn_gateways() if self.has_vpn_sdk else []
+        # 获取全局网络资源（主要是CEN）
+        cen_instances = self.get_cen_instances() if self.has_cbn_sdk else []
         
-        # 整合传输网关及高级网络区域相关资产信息
+        # 获取云企业网实例的网络实例连接（这些连接信息在CEN级别是全局可见的）
+        cen_attachments = {}
+        for instance in cen_instances:
+            cen_id = instance.get('CenId')
+            if cen_id:
+                cen_attachments[cen_id] = self.get_cen_attachments(cen_id)
+        
+        # 整合所有传输网关及高级网络全局资产信息
         transit_gateway_assets = {
             'sdk_status': sdk_status,
-            # CEN相关资源移到全局收集器
-            # 'cen_instances': {},  # CEN实例是全局资源
-            # 'cen_attachments': {},  # CEN连接信息是全局资源
-            'physical_connections': {conn['PhysicalConnectionId']: conn for conn in physical_connections},
-            'vpn_gateways': {gateway['VpnGatewayId']: gateway for gateway in vpn_gateways},
+            'cen_instances': {instance['CenId']: instance for instance in cen_instances},
+            'cen_attachments': cen_attachments,
+            # 注意：以下资源移到区域收集器中，因为它们是区域相关的
+            # 'physical_connections': {},  # 高速通道物理专线是区域相关的
+            # 'vpn_gateways': {},  # VPN网关是区域相关的
         }
         
         # 记录摘要信息
-        logger.info(f"已获取 {len(physical_connections)} 个物理专线, {len(vpn_gateways)} 个VPN网关（区域资源）")
-        logger.info("云企业网(CEN)实例信息请从 TransitGatewayGlobalAssetCollector 获取")
+        logger.info(f"已获取 {len(cen_instances)} 个云企业网实例（全局资源）")
+        logger.info("区域相关的高速通道和VPN网关资源请从区域收集器获取")
         
         return transit_gateway_assets

@@ -1,5 +1,6 @@
 """
-AWS WAF资源处理模块，负责获取WAF Web ACL、规则组、IP集合等Web应用防火墙资源信息。
+AWS WAF全局资源处理模块，负责获取WAF Web ACL、规则组、IP集合等Web应用防火墙全局资源信息。
+WAF是AWS的全局服务，在不同区域获取到的数据是一致的。
 """
 import boto3
 import logging
@@ -7,12 +8,12 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-class WAFAssetCollector:
-    """AWS WAF资源收集器"""
+class WAFGlobalAssetCollector:
+    """AWS WAF全局资源收集器"""
 
     def __init__(self, session):
         """
-        初始化WAF资源收集器
+        初始化WAF全局资源收集器
 
         Args:
             session: AWS会话对象
@@ -75,26 +76,46 @@ class WAFAssetCollector:
                     # 获取关联的资源
                     associated_resources = []
                     try:
-                        resources_next_marker = None
-                        while True:
-                            if resources_next_marker:
-                                resources_response = self.wafv2_client.list_resources_for_web_acl(
-                                    WebACLArn=acl['ARN'],
-                                    ResourceType='APPLICATION_LOAD_BALANCER',
-                                    NextMarker=resources_next_marker
-                                )
-                            else:
-                                resources_response = self.wafv2_client.list_resources_for_web_acl(
-                                    WebACLArn=acl['ARN'],
-                                    ResourceType='APPLICATION_LOAD_BALANCER'
-                                )
-                            
-                            associated_resources.extend(resources_response.get('ResourceArns', []))
-                            
-                            if 'NextMarker' in resources_response:
-                                resources_next_marker = resources_response['NextMarker']
-                            else:
-                                break
+                        if scope == 'REGIONAL':
+                            # 区域Web ACL可以关联ALB、API Gateway等
+                            resources_next_marker = None
+                            while True:
+                                if resources_next_marker:
+                                    resources_response = self.wafv2_client.list_resources_for_web_acl(
+                                        WebACLArn=acl['ARN'],
+                                        ResourceType='APPLICATION_LOAD_BALANCER',
+                                        NextMarker=resources_next_marker
+                                    )
+                                else:
+                                    resources_response = self.wafv2_client.list_resources_for_web_acl(
+                                        WebACLArn=acl['ARN'],
+                                        ResourceType='APPLICATION_LOAD_BALANCER'
+                                    )
+                                
+                                associated_resources.extend(resources_response.get('ResourceArns', []))
+                                
+                                if 'NextMarker' in resources_response:
+                                    resources_next_marker = resources_response['NextMarker']
+                                else:
+                                    break
+                        elif scope == 'CLOUDFRONT':
+                            # CloudFront Web ACL关联的资源
+                            resources_next_marker = None
+                            while True:
+                                if resources_next_marker:
+                                    resources_response = self.wafv2_client.list_resources_for_web_acl(
+                                        WebACLArn=acl['ARN'],
+                                        NextMarker=resources_next_marker
+                                    )
+                                else:
+                                    resources_response = self.wafv2_client.list_resources_for_web_acl(WebACLArn=acl['ARN'])
+                                
+                                associated_resources.extend(resources_response.get('ResourceArns', []))
+                                
+                                if 'NextMarker' in resources_response:
+                                    resources_next_marker = resources_response['NextMarker']
+                                else:
+                                    break
                     except Exception as e:
                         logger.warning(f"获取Web ACL {acl['Name']} 关联资源失败: {str(e)}")
                     
@@ -233,12 +254,12 @@ class WAFAssetCollector:
 
         try:
             # 获取CloudFront范围的IP集合
-            cloudfront_sets = self._get_ip_sets_by_scope('CLOUDFRONT')
-            all_ip_sets.extend(cloudfront_sets)
+            cloudfront_ip_sets = self._get_ip_sets_by_scope('CLOUDFRONT')
+            all_ip_sets.extend(cloudfront_ip_sets)
             
             # 获取区域范围的IP集合
-            regional_sets = self._get_ip_sets_by_scope('REGIONAL')
-            all_ip_sets.extend(regional_sets)
+            regional_ip_sets = self._get_ip_sets_by_scope('REGIONAL')
+            all_ip_sets.extend(regional_ip_sets)
 
         except Exception as e:
             logger.error(f"获取WAF IP集合信息失败: {str(e)}")
@@ -313,21 +334,21 @@ class WAFAssetCollector:
             List[Dict[str, Any]]: 正则表达式模式集合列表
         """
         logger.info("获取WAF正则表达式模式集合信息")
-        all_regex_sets = []
+        all_regex_pattern_sets = []
 
         try:
-            # 获取CloudFront范围的正则模式集合
-            cloudfront_sets = self._get_regex_pattern_sets_by_scope('CLOUDFRONT')
-            all_regex_sets.extend(cloudfront_sets)
+            # 获取CloudFront范围的正则表达式模式集合
+            cloudfront_regex_sets = self._get_regex_pattern_sets_by_scope('CLOUDFRONT')
+            all_regex_pattern_sets.extend(cloudfront_regex_sets)
             
-            # 获取区域范围的正则模式集合
-            regional_sets = self._get_regex_pattern_sets_by_scope('REGIONAL')
-            all_regex_sets.extend(regional_sets)
+            # 获取区域范围的正则表达式模式集合
+            regional_regex_sets = self._get_regex_pattern_sets_by_scope('REGIONAL')
+            all_regex_pattern_sets.extend(regional_regex_sets)
 
         except Exception as e:
             logger.error(f"获取WAF正则表达式模式集合信息失败: {str(e)}")
 
-        return all_regex_sets
+        return all_regex_pattern_sets
 
     def _get_regex_pattern_sets_by_scope(self, scope: str) -> List[Dict[str, Any]]:
         """
@@ -337,9 +358,9 @@ class WAFAssetCollector:
             scope: 'CLOUDFRONT' 或 'REGIONAL'
             
         Returns:
-            List[Dict[str, Any]]: 指定范围的正则模式集合列表
+            List[Dict[str, Any]]: 指定范围的正则表达式模式集合列表
         """
-        regex_sets = []
+        regex_pattern_sets = []
         
         try:
             next_marker = None
@@ -350,8 +371,8 @@ class WAFAssetCollector:
                     response = self.wafv2_client.list_regex_pattern_sets(Scope=scope)
                 
                 for regex_set in response.get('RegexPatternSets', []):
-                    # 获取正则模式集合详细信息
-                    regex_detail = self.wafv2_client.get_regex_pattern_set(
+                    # 获取正则表达式模式集合详细信息
+                    regex_set_detail = self.wafv2_client.get_regex_pattern_set(
                         Name=regex_set['Name'],
                         Scope=scope,
                         Id=regex_set['Id']
@@ -365,18 +386,18 @@ class WAFAssetCollector:
                         )
                         tags = tags_response.get('TagList', {}).get('Tags', [])
                     except Exception as e:
-                        logger.warning(f"获取正则模式集合 {regex_set['Name']} 标签失败: {str(e)}")
+                        logger.warning(f"获取正则表达式模式集合 {regex_set['Name']} 标签失败: {str(e)}")
                     
-                    regex_set_info = {
-                        'Id': regex_detail['RegexPatternSet'].get('Id'),
-                        'Name': regex_detail['RegexPatternSet'].get('Name'),
-                        'ARN': regex_detail['RegexPatternSet'].get('ARN'),
+                    regex_pattern_set_info = {
+                        'Id': regex_set_detail['RegexPatternSet'].get('Id'),
+                        'Name': regex_set_detail['RegexPatternSet'].get('Name'),
+                        'ARN': regex_set_detail['RegexPatternSet'].get('ARN'),
                         'Scope': scope,
-                        'RegularExpressionList': regex_detail['RegexPatternSet'].get('RegularExpressionList', []),
-                        'Description': regex_detail['RegexPatternSet'].get('Description'),
+                        'Description': regex_set_detail['RegexPatternSet'].get('Description'),
+                        'RegularExpressionList': regex_set_detail['RegexPatternSet'].get('RegularExpressionList', []),
                         'Tags': tags
                     }
-                    regex_sets.append(regex_set_info)
+                    regex_pattern_sets.append(regex_pattern_set_info)
                 
                 if 'NextMarker' in response:
                     next_marker = response['NextMarker']
@@ -384,30 +405,25 @@ class WAFAssetCollector:
                     break
                     
         except Exception as e:
-            logger.error(f"获取范围 {scope} 的正则模式集合失败: {str(e)}")
+            logger.error(f"获取范围 {scope} 的正则表达式模式集合失败: {str(e)}")
             
-        return regex_sets
+        return regex_pattern_sets
 
-    def get_all_waf_assets(self) -> Dict[str, Any]:
+    def get_all_waf_global_assets(self) -> Dict[str, Any]:
         """
-        获取所有WAF资源
+        获取所有WAF全局资源
 
         Returns:
-            Dict[str, Any]: 所有WAF资源
+            Dict[str, Any]: 所有WAF全局资源
         """
-        logger.info("获取所有WAF资源")
+        logger.info("开始收集所有WAF全局资源")
         
-        web_acls = self.get_web_acls()
-        rule_groups = self.get_rule_groups()
-        ip_sets = self.get_ip_sets()
-        regex_pattern_sets = self.get_regex_pattern_sets()
-        
-        waf_assets = {
-            'web_acls': {acl['Id']: acl for acl in web_acls},
-            'rule_groups': {group['Id']: group for group in rule_groups},
-            'ip_sets': {ip_set['Id']: ip_set for ip_set in ip_sets},
-            'regex_pattern_sets': {regex_set['Id']: regex_set for regex_set in regex_pattern_sets}
+        assets = {
+            'web_acls': self.get_web_acls(),
+            'rule_groups': self.get_rule_groups(),
+            'ip_sets': self.get_ip_sets(),
+            'regex_pattern_sets': self.get_regex_pattern_sets()
         }
         
-        logger.info(f"已获取 {len(web_acls)} 个Web ACL, {len(rule_groups)} 个规则组, {len(ip_sets)} 个IP集合, {len(regex_pattern_sets)} 个正则模式集合")
-        return waf_assets 
+        logger.info("WAF全局资源收集完成")
+        return assets 

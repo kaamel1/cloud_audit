@@ -39,10 +39,19 @@ class ACMGlobalAssetCollector:
             
             for status in certificate_statuses:
                 try:
-                    paginator = self.acm_client.get_paginator('list_certificates')
-                    
-                    for page in paginator.paginate(CertificateStatuses=[status]):
-                        for cert in page.get('CertificateSummaryList', []):
+                    next_token = None
+                    while True:
+                        if next_token:
+                            response = self.acm_client.list_certificates(
+                                CertificateStatuses=[status],
+                                NextToken=next_token
+                            )
+                        else:
+                            response = self.acm_client.list_certificates(
+                                CertificateStatuses=[status]
+                            )
+                        
+                        for cert in response.get('CertificateSummaryList', []):
                             # 获取证书详细信息
                             cert_detail = self.acm_client.describe_certificate(
                                 CertificateArn=cert['CertificateArn']
@@ -114,6 +123,11 @@ class ACMGlobalAssetCollector:
                             
                             certificates.append(cert_info)
                             
+                        if 'NextToken' in response:
+                            next_token = response['NextToken']
+                        else:
+                            break
+
                 except Exception as e:
                     logger.warning(f"获取状态 {status} 的证书失败: {str(e)}")
 
@@ -155,12 +169,16 @@ class ACMGlobalAssetCollector:
 
         try:
             # 创建ACM PCA客户端
-            acm_pca_client = self.session.get_client('acm-pca', region_name='us-east-1')
+            acm_pca_client = self.session.get_client('acm-pca')
             
-            paginator = acm_pca_client.get_paginator('list_certificate_authorities')
-            
-            for page in paginator.paginate():
-                for ca in page.get('CertificateAuthorities', []):
+            next_token = None
+            while True:
+                if next_token:
+                    response = acm_pca_client.list_certificate_authorities(NextToken=next_token)
+                else:
+                    response = acm_pca_client.list_certificate_authorities()
+                
+                for ca in response.get('CertificateAuthorities', []):
                     ca_arn = ca.get('Arn')
                     
                     # 获取CA详细信息
@@ -216,6 +234,11 @@ class ACMGlobalAssetCollector:
                         
                     except Exception as e:
                         logger.warning(f"获取CA {ca_arn} 详细信息失败: {str(e)}")
+                
+                if 'NextToken' in response:
+                    next_token = response['NextToken']
+                else:
+                    break
 
         except Exception as e:
             logger.error(f"获取ACM PCA信息失败: {str(e)}")

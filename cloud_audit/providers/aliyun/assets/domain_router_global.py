@@ -1,16 +1,16 @@
-"""阿里云域名与路由处理模块，负责获取DNS、域名等资源信息。"""
+"""阿里云域名与路由全局资源处理模块，负责获取DNS、域名等全局资源信息。"""
 import logging
 from typing import Dict, List, Any
 import importlib
 
 logger = logging.getLogger(__name__)
 
-class DomainRouterAssetCollector:
-    """阿里云域名与路由资源收集器"""
+class DomainRouterGlobalAssetCollector:
+    """阿里云域名与路由全局资源收集器"""
 
     def __init__(self, session):
         """
-        初始化域名与路由资源收集器
+        初始化域名与路由全局资源收集器
 
         Args:
             session: 阿里云会话对象
@@ -569,54 +569,33 @@ class DomainRouterAssetCollector:
 
         return cdn_domains
 
-    def get_dns_records_by_line(self, domain_name: str, line: str = None) -> List[Dict[str, Any]]:
+    def get_all_domain_router_global_assets(self) -> Dict[str, Any]:
         """
-        获取指定域名的DNS记录（按解析线路过滤，这是区域相关的部分）
-
-        Args:
-            domain_name: 域名名称
-            line: 解析线路（如：默认、联通、电信、移动等）
+        获取所有域名与路由全局资产信息
 
         Returns:
-            List[Dict[str, Any]]: 特定解析线路的DNS记录列表
+            Dict[str, Any]: 所有域名与路由全局资产信息
         """
-        if line:
-            logger.info(f"获取域名 {domain_name} 在解析线路 {line} 的DNS记录")
-        else:
-            logger.info(f"获取域名 {domain_name} 的所有解析线路DNS记录")
+        logger.info("获取所有域名与路由全局资产信息")
         
-        records = self.get_dns_records(domain_name)
+        # 获取各类域名信息
+        domains = self.get_domains()
+        dns_domains = self.get_dns_domains()
+        cdn_domains = self.get_cdn_domains()
         
-        if line:
-            # 过滤特定解析线路的记录
-            filtered_records = [record for record in records if record.get('Line') == line]
-            logger.info(f"找到 {len(filtered_records)} 条解析线路 {line} 的记录")
-            return filtered_records
+        # 获取DNS记录
+        dns_records = {}
+        for domain in dns_domains:
+            domain_name = domain.get('DomainName')
+            if domain_name:
+                dns_records[domain_name] = self.get_dns_records(domain_name)
         
-        return records
-
-    def get_all_domain_router_assets(self) -> Dict[str, Any]:
-        """
-        获取所有域名与路由区域相关资产信息
-        注意：大部分域名资源是全局的，此方法主要获取DNS解析线路相关的区域性配置
-        全局域名资源请使用 DomainRouterGlobalAssetCollector
-
-        Returns:
-            Dict[str, Any]: 域名与路由区域相关资产信息
-        """
-        logger.info("获取域名与路由区域相关资产信息（主要是DNS解析线路配置）")
-        
-        # 在区域级别，我们主要关注DNS解析线路配置
-        # 这里只收集DNS解析线路相关的区域性信息
-        
-        # 为了保持接口一致性，返回空的域名基础信息，实际域名信息从全局收集器获取
+        # 整合所有域名与路由资产信息
         domain_router_assets = {
-            'domains': {},  # 域名注册信息是全局的
-            'dns_domains': {},  # DNS域名信息是全局的  
-            'dns_records': {},  # DNS记录的线路配置是区域相关的，但需要先从全局获取域名列表
-            'cdn_domains': {},  # CDN域名信息是全局的
-            'regional_dns_configs': {},  # 预留给未来的区域特定DNS配置
+            'domains': {domain['DomainName']: domain for domain in domains},
+            'dns_domains': {domain['DomainName']: domain for domain in dns_domains},
+            'dns_records': dns_records,
+            'cdn_domains': {domain['DomainName']: domain for domain in cdn_domains},
         }
         
-        logger.info("域名基础信息请从 DomainRouterGlobalAssetCollector 获取")
         return domain_router_assets

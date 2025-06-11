@@ -31,6 +31,7 @@ class DatabaseAssetCollector:
             List[Dict[str, Any]]: RDS实例列表
         """
         logger.info("获取RDS实例信息")
+        logger.info(f"=== 开始获取区域 {self.session.region_id} 的RDS实例 ===")
         instances = []
 
         try:
