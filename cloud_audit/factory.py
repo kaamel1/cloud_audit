@@ -65,6 +65,13 @@ try:
 except ImportError:
     pass
 
+# Register Azure factory
+try:
+    from .providers.azure import AzureAuditorFactory
+    manager.register_factory('azure', AzureAuditorFactory())
+    manager.register_global_region('azure', 'australiacentral')
+except ImportError:
+    pass
 
 # Register QCloud factory
 try:
@@ -73,3 +80,5 @@ try:
     manager.register_global_region('qcloud', 'ap-beijing')
 except ImportError:
     pass
+
+

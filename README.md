@@ -106,6 +106,7 @@ python cloud_audit_cli.py audit \
 --access-key-id xxxx \
 --secret-access-key xxx \
 --output-dir output_xxx 
+
 ```
 
 ##### 参数说明
@@ -171,6 +172,8 @@ output/
 ### 审计过程中出现权限错误
 - 确保使用的用户或角色有足够的权限
 - 对于跨账户审计，确保目标角色有足够的权限
+
+
 
 # RDS
 ## pgsql数据获取

@@ -133,9 +133,13 @@ class AWSAuditorFactory(CloudAuditorFactory):
         return AWSAuditor(session, output_dir)
 
 
+# 导入session和auditor类以便导出
+from .auditor import AWSAuditor
+
 __all__ = [
     'AWSProvider',
     'AWSSession',
     'AWSAuthenticator',
+    'AWSAuditor',
     'AWSAuditorFactory',
 ]

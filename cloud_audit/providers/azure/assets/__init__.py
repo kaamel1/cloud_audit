@@ -1,0 +1,1 @@
+# Azure assets collectors 

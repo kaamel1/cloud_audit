@@ -241,9 +241,13 @@ class AliyunAuditorFactory(CloudAuditorFactory):
         return AliyunAuditor(session.aliyun_session, output_dir)
 
 
+# 导入auditor类以便导出
+from .auditor import AliyunAuditor
+
 __all__ = [
     'AliyunProvider',
     'AliyunCloudSession', 
     'AliyunAuthenticator',
+    'AliyunAuditor',
     'AliyunAuditorFactory',
 ]
