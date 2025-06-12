@@ -7,10 +7,11 @@ import click
 import logging
 import os
 from cloud_audit.factory import manager as cloud_manager
+import json
 
 # 配置日志
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('cloud-audit')
@@ -21,10 +22,41 @@ def cli():
     """多云资源审计工具 - 收集云账号资源和权限信息"""
     pass
 
+def merged_output_core(output_dir: str):
+    """合并输出目录"""
+    output_dir_path = f"output_all/{output_dir}"
+    if not os.path.exists(output_dir_path):
+        click.echo(f"输出目录 {output_dir_path} 不存在")
+        return
+    
+    # 遍历output_dir_region目录下的所有子目录
+    merged_assets = {
+        'type': '',
+        'global': {},
+        'regions': {}
+    }
+    for regionDir in os.listdir(output_dir_path):
+        print(regionDir)
+        if regionDir == 'global':
+            if os.path.exists(f'{output_dir_path}/{regionDir}/assets/all_assets_global.json'):
+                with open(f'{output_dir_path}/{regionDir}/assets/all_assets_global.json', 'r') as f:
+                    all_assets_global = json.loads(f.read())
+                    merged_assets['type'] = all_assets_global.get('type').split('_')[0]
+                    merged_assets['global'] = all_assets_global.get('assets')
+        else:
+            if os.path.exists(f'{output_dir_path}/{regionDir}/assets/all_assets.json'):
+                with open(f'{output_dir_path}/{regionDir}/assets/all_assets.json', 'r') as f:
+                    all_assets = json.loads(f.read())
+                    merged_assets['regions'][regionDir] = all_assets.get('assets')
+
+        with open(f'{output_dir_path}/all_assets_merged.json', 'w') as f:
+            json.dump(merged_assets, f, indent=4)
+
+
 
 @cli.command()
 @click.option('--provider', type=click.Choice(cloud_manager.supported_providers), required=True,
-              help='云服务提供商 (aws, aliyun, azure)')
+              help='云服务提供商 (aws, aliyun, azure, qcloud)')
 @click.option('--role-arn', help='要切换到的IAM角色ARN (仅AWS)')
 @click.option('--profile', help='使用的配置文件名称')
 @click.option('--access-key-id', help='访问密钥ID')
@@ -47,7 +79,7 @@ def audit(provider, role_arn, profile, access_key_id, secret_access_key,
     
     支持多种认证方式：
     
-    AWS/阿里云:
+    AWS/阿里云/腾讯云:
     1. 使用配置文件（--profile）
     2. 使用访问密钥（--access-key-id 和 --secret-access-key）
     3. 使用临时凭证（需要额外提供 --session-token）
@@ -60,6 +92,8 @@ def audit(provider, role_arn, profile, access_key_id, secret_access_key,
     角色切换（仅AWS）：
     - 使用 --role-arn 指定目标角色
     - 如果需要，可以使用 --external-id 提供External ID
+    
+    注意：对于腾讯云，--access-key-id 对应SecretId，--secret-access-key 对应SecretKey，--session-token 对应Token
     """
     if verbose:
         logger.setLevel(logging.DEBUG)
@@ -108,6 +142,12 @@ def audit(provider, role_arn, profile, access_key_id, secret_access_key,
                     'access_key_id': access_key_id,
                     'access_key_secret': secret_access_key,  # 阿里云使用access_key_secret
                 })
+            elif provider == 'qcloud':
+                session_params.update({
+                    'secret_id': access_key_id,  # 腾讯云使用secret_id
+                    'secret_key': secret_access_key,  # 腾讯云使用secret_key
+                    'token': session_token,  # 腾讯云使用token（可能为None）
+                })
             else:
                 session_params.update({
                     'access_key_id': access_key_id,
@@ -126,6 +166,8 @@ def audit(provider, role_arn, profile, access_key_id, secret_access_key,
             elif provider == 'azure':
                 # Azure 不需要在会话创建时指定区域，区域在资源查询时处理
                 pass
+            elif provider == 'qcloud':
+                session_params['region'] = region
             else:
                 session_params['region'] = region
             logger.info(f"使用区域: {region}")
@@ -203,6 +245,23 @@ def audit(provider, role_arn, profile, access_key_id, secret_access_key,
                 else:
                     region_id = regionOne
                     current_session = session
+            elif provider == 'qcloud':
+                # 腾讯云区域是字符串格式
+                if region and regionOne != region:
+                    continue
+                output_dir_region = f"output_all/{output_dir}/{regionOne}"
+                region_id = regionOne
+                
+                # 为腾讯云每个区域创建独立的session
+                region_session_params = session_params.copy()
+                if regionOne == "global":
+                    region_session_params['region'] = global_region
+                else:
+                    region_session_params['region'] = regionOne
+                
+                logger.info(f"为区域 {regionOne} 创建独立的session")
+                region_session = cloud_manager.create_session(provider, **region_session_params)
+                current_session = region_session
             else:
                 # AWS等其他provider，区域是字符串格式
                 if region and regionOne != region:
@@ -252,6 +311,7 @@ def audit(provider, role_arn, profile, access_key_id, secret_access_key,
         for summary in region_summary:
             click.echo(f"- 区域: {summary['region']}")
             click.echo(f"- 输出目录: {summary['output_dir']}")
+        merged_output_core(output_dir)
 
     except Exception as e:
         logger.error(f"审计过程中发生错误: {str(e)}", exc_info=True)
@@ -264,6 +324,13 @@ def list_providers():
     click.echo("支持的云服务提供商:")
     for provider in providers:
         click.echo(f"- {provider}")
+
+@cli.command()
+@click.option('--output-dir', default='output', help='输出目录路径')
+def merged_output(output_dir: str):
+    """合并输出目录"""
+    merged_output_core(output_dir)
+
 
 
 if __name__ == '__main__':

@@ -99,6 +99,13 @@ python cloud_audit_cli.py audit \
 --profile xxx \
 --role-arn acs:ram::xxxx:role/xxx \
 --output-dir output_xxx
+
+# 执行 腾讯云 审计
+python cloud_audit_cli.py audit \
+--provider qcloud \
+--access-key-id xxxx \
+--secret-access-key xxx \
+--output-dir output_xxx 
 ```
 
 ##### 参数说明

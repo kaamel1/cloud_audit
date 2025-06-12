@@ -66,3 +66,10 @@ except ImportError:
     pass
 
 
+# Register QCloud factory
+try:
+    from .providers.qcloud import QCloudAuditorFactory
+    manager.register_factory('qcloud', QCloudAuditorFactory())
+    manager.register_global_region('qcloud', 'ap-beijing')
+except ImportError:
+    pass
