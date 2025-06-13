@@ -3,7 +3,7 @@
 
 负责收集腾讯云的CDN全局资源，包括：
 - CDN域名管理 - 全局服务（域名管理不区分区域）
-- CDN全站加速域名 - 全局服务
+- ECDN全站加速域名 - 注意：ECDN服务已下线（2025-07-27），域名已迁移至CDN
 """
 
 import logging
@@ -40,10 +40,12 @@ class CDNGlobalAssetCollector:
             # CDN是全局服务，不需要指定区域
             cdn_client = self.session.get_client('cdn')
             
-            # 获取CDN域名列表（全局）
-            # 这里需要根据实际的腾讯云CDN API来实现
-            # 示例代码，实际需要根据SDK调整
-            response = cdn_client.describe_domains()
+            # 创建DescribeDomains请求对象
+            from tencentcloud.cdn.v20180606 import models
+            request = models.DescribeDomainsRequest()
+            
+            # 调用DescribeDomains接口
+            response = cdn_client.DescribeDomains(request)
             
             if hasattr(response, 'Domains') and response.Domains:
                 for domain in response.Domains:
@@ -67,36 +69,14 @@ class CDNGlobalAssetCollector:
         """
         获取ECDN域名列表（全局服务）
         
-        Returns:
-            List[Dict[str, Any]]: ECDN域名列表
-        """
-        logger.info("收集ECDN域名（全局）")
-        domains = []
+        注意：ECDN服务已下线（预计2025-07-27完全下线），相关域名已迁移至CDN
+        建议使用CDN API来获取原ECDN域名信息
         
-        try:
-            # ECDN也是全局服务
-            ecdn_client = self.session.get_client('ecdn')
-            
-            # 获取ECDN域名列表（全局）
-            response = ecdn_client.describe_domains()
-            
-            if hasattr(response, 'Domains') and response.Domains:
-                for domain in response.Domains:
-                    domain_info = {
-                        'domain': domain.get('Domain', ''),
-                        'service_type': domain.get('ServiceType', ''),
-                        'status': domain.get('Status', ''),
-                        'cname': domain.get('Cname', ''),
-                        'create_time': domain.get('CreateTime', ''),
-                        'type': 'ecdn_domain'
-                    }
-                    domains.append(domain_info)
-                    
-        except Exception as e:
-            logger.error(f"获取ECDN域名时发生错误: {str(e)}")
-            
-        logger.info(f"共收集到 {len(domains)} 个ECDN域名")
-        return domains
+        Returns:
+            List[Dict[str, Any]]: ECDN域名列表（返回空列表，因为服务已下线）
+        """
+        logger.warning("ECDN服务已下线，无法获取ECDN域名。ECDN域名已迁移至CDN，建议使用CDN API获取")
+        return []
         
     def get_all_cdn_global_assets(self) -> Dict[str, Dict[str, Any]]:
         """

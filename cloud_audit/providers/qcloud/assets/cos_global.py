@@ -41,16 +41,29 @@ class COSGlobalAssetCollector:
             
             # COS的list_buckets API返回账户下所有区域的存储桶
             response = cos_client.list_buckets()
+            logger.debug(f"COS list_buckets响应: {response}")
             
-            if 'Buckets' in response and 'Bucket' in response['Buckets']:
-                for bucket in response['Buckets']['Bucket']:
-                    bucket_info = {
-                        'bucket_name': bucket.get('Name', ''),
-                        'location': bucket.get('Location', ''),  # 存储桶所在区域
-                        'creation_date': bucket.get('CreationDate', ''),
-                        'type': 'cos_bucket'
-                    }
-                    buckets.append(bucket_info)
+            # 安全地检查响应结构
+            if response and isinstance(response, dict):
+                buckets_data = response.get('Buckets')
+                if buckets_data and isinstance(buckets_data, dict):
+                    bucket_list = buckets_data.get('Bucket', [])
+                    if bucket_list and isinstance(bucket_list, list):
+                        for bucket in bucket_list:
+                            if bucket and isinstance(bucket, dict):
+                                bucket_info = {
+                                    'bucket_name': bucket.get('Name', ''),
+                                    'location': bucket.get('Location', ''),  # 存储桶所在区域
+                                    'creation_date': bucket.get('CreationDate', ''),
+                                    'type': 'cos_bucket'
+                                }
+                                buckets.append(bucket_info)
+                    else:
+                        logger.info("COS响应中没有存储桶数据或数据格式不正确")
+                else:
+                    logger.info("COS响应中没有Buckets字段或字段为空")
+            else:
+                logger.warning("COS list_buckets返回了空响应或格式不正确")
                     
         except Exception as e:
             logger.error(f"获取COS存储桶时发生错误: {str(e)}")

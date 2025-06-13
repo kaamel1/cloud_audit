@@ -183,24 +183,37 @@ class StorageAssetCollector:
             
             # 使用COS SDK的方法获取桶列表
             response = cos_client.list_buckets()
+            logger.debug(f"COS list_buckets响应: {response}")
             
-            if 'Buckets' in response and 'Bucket' in response['Buckets']:
-                for bucket in response['Buckets']['Bucket']:
-                    # 只收集属于当前区域的存储桶
-                    bucket_region = bucket.get('Location', '')
-                    if bucket_region == region:
-                        bucket_name = bucket.get('Name', '')
-                        if bucket_name:
-                            bucket_info = {
-                                'region': region,
-                                'bucket_name': bucket_name,
-                                'creation_date': bucket.get('CreationDate', ''),
-                                'location': bucket_region,
-                            }
-                            
-                            # 获取桶的详细配置信息
-                            bucket_info.update(self._get_bucket_details(cos_client, bucket_name))
-                            buckets.append(bucket_info)
+            # 安全地检查响应结构
+            if response and isinstance(response, dict):
+                buckets_data = response.get('Buckets')
+                if buckets_data and isinstance(buckets_data, dict):
+                    bucket_list = buckets_data.get('Bucket', [])
+                    if bucket_list and isinstance(bucket_list, list):
+                        for bucket in bucket_list:
+                            if bucket and isinstance(bucket, dict):
+                                # 只收集属于当前区域的存储桶
+                                bucket_region = bucket.get('Location', '')
+                                if bucket_region == region:
+                                    bucket_name = bucket.get('Name', '')
+                                    if bucket_name:
+                                        bucket_info = {
+                                            'region': region,
+                                            'bucket_name': bucket_name,
+                                            'creation_date': bucket.get('CreationDate', ''),
+                                            'location': bucket_region,
+                                        }
+                                        
+                                        # 获取桶的详细配置信息
+                                        bucket_info.update(self._get_bucket_details(cos_client, bucket_name))
+                                        buckets.append(bucket_info)
+                    else:
+                        logger.info(f"区域 {region} 中没有COS存储桶数据或数据格式不正确")
+                else:
+                    logger.info(f"区域 {region} 中没有COS Buckets字段或字段为空")
+            else:
+                logger.warning(f"区域 {region} 的COS list_buckets返回了空响应或格式不正确")
                         
         except Exception as e:
             logger.error(f"获取对象存储桶时发生错误: {str(e)}")

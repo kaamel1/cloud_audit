@@ -93,8 +93,8 @@ class ComputeAssetCollector:
                             'zone': instance.Placement.Zone,
                             'project_id': instance.Placement.ProjectId,
                         } if instance.Placement else None,
-                        'private_ip_addresses': [ip.PrivateIpAddress for ip in instance.PrivateIpAddresses] if instance.PrivateIpAddresses else [],
-                        'public_ip_addresses': [ip.PublicIpAddress for ip in instance.PublicIpAddresses] if instance.PublicIpAddresses else [],
+                        'private_ip_addresses': instance.PrivateIpAddresses if instance.PrivateIpAddresses else [],
+                        'public_ip_addresses': instance.PublicIpAddresses if instance.PublicIpAddresses else [],
                         'vpc_id': instance.VirtualPrivateCloud.VpcId if instance.VirtualPrivateCloud else None,
                         'subnet_id': instance.VirtualPrivateCloud.SubnetId if instance.VirtualPrivateCloud else None,
                         'security_group_ids': instance.SecurityGroupIds,
@@ -302,10 +302,10 @@ class ComputeAssetCollector:
             # 添加过滤器，排除官方镜像 (image-source != OFFICIAL)
             # 注意：腾讯云API的过滤器是包含关系，我们需要指定要包含的类型
             # 非官方镜像的来源类型包括：CREATE_IMAGE（用户自建）、EXTERNAL_IMPORT（外部导入）等
-            filter_obj = cvm_models.Filter()
-            filter_obj.Name = "image-source"
-            filter_obj.Values = ["CREATE_IMAGE", "EXTERNAL_IMPORT"]  # 只包含自定义和外部导入的镜像
-            req.Filters = [filter_obj]
+            # filter_obj = cvm_models.Filter()
+            # filter_obj.Name = "image-source"
+            # filter_obj.Values = ["CREATE_IMAGE", "EXTERNAL_IMPORT"]  # 只包含自定义和外部导入的镜像
+            # req.Filters = [filter_obj]
             
             resp = cvm_client.DescribeImages(req)
             
